@@ -69,7 +69,7 @@ func WithParam(key string, value interface{}) ChainCallOption {
 }
 
 type client struct {
-	hc  HTTPClient
+	cli HTTPClient
 	cfg *Config
 	key *PrivateKey
 }
@@ -139,7 +139,7 @@ func (c *client) chainCallForBiz(ctx context.Context, method string, options ...
 }
 
 func (c *client) SetHTTPClient(cli *http.Client) {
-	c.hc = NewHTTPClient(cli)
+	c.cli = NewHTTPClient(cli)
 }
 
 type LogData struct {
@@ -159,7 +159,7 @@ func (c *client) do(ctx context.Context, reqURL string, params X) (string, error
 		return "", err
 	}
 
-	resp, err := c.hc.Do(ctx, http.MethodPost, reqURL, body, WithHTTPHeader("Content-Type", "application/json; charset=utf-8"))
+	resp, err := c.cli.Do(ctx, http.MethodPost, reqURL, body, WithHTTPHeader("Content-Type", "application/json; charset=utf-8"))
 
 	if err != nil {
 		return "", err
@@ -190,7 +190,7 @@ func NewClientWithAccessKeyBlock(keyBlock []byte, cfg *Config) (Client, error) {
 	}
 
 	return &client{
-		hc:  NewDefaultHTTPClient(),
+		cli: NewDefaultHTTPClient(),
 		cfg: cfg,
 		key: pk,
 	}, nil
@@ -204,7 +204,7 @@ func NewClientWithAccessKeyFile(keyFile string, cfg *Config) (Client, error) {
 	}
 
 	return &client{
-		hc:  NewDefaultHTTPClient(),
+		cli: NewDefaultHTTPClient(),
 		cfg: cfg,
 		key: pk,
 	}, nil
