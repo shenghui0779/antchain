@@ -19,7 +19,8 @@ type Config struct {
 	BizID      string `json:"biz_id"`      // 链ID
 	Endpoint   string `json:"endpoint"`    // 请求地址
 	TenantID   string `json:"tenant_id"`   // 租户ID
-	AccessID   string `json:"access_id"`   // 访问ID
+	AccessID   string `json:"access_id"`   // AccessID
+	AccessKey  string `json:"access_key"`  // AccessKey (注意：Key文件路径)
 	Account    string `json:"account"`     // 链账户
 	MyKmsKeyID string `json:"mykmskey_id"` // 托管标识
 }
@@ -55,9 +56,6 @@ type Client interface {
 
 	// QueryAccount 查询账户
 	QueryAccount(ctx context.Context, account string) (string, error)
-
-	// SetHTTPClient 设置自定义 http.Client
-	SetHTTPClient(c *http.Client)
 }
 
 type ChainCallOption func(params X)
@@ -176,36 +174,36 @@ func (c *client) do(ctx context.Context, reqURL string, params X) (string, error
 	ret := gjson.ParseBytes(b)
 
 	if !ret.Get("success").Bool() {
-		return "", fmt.Errorf("Err %s | %s", ret.Get("code").String(), ret.Get("data").String())
+		return "", fmt.Errorf("antchain: %s | %s", ret.Get("code").String(), ret.Get("data").String())
 	}
 
 	return ret.Get("data").String(), nil
 }
 
-func NewClientWithAccessKeyBlock(keyBlock []byte, cfg *Config) (Client, error) {
-	pk, err := NewPrivateKeyFromPemBlock(keyBlock)
+type ClientOption func(c *client)
 
-	if err != nil {
-		return nil, err
+func WithHTTPClient(cli *http.Client) ClientOption {
+	return func(c *client) {
+		c.cli = NewHTTPClient(cli)
 	}
-
-	return &client{
-		cli: NewDefaultHTTPClient(),
-		cfg: cfg,
-		key: pk,
-	}, nil
 }
 
-func NewClientWithAccessKeyFile(keyFile string, cfg *Config) (Client, error) {
-	pk, err := NewPrivateKeyFromPemFile(keyFile)
+func NewClient(cfg *Config, options ...ClientOption) (Client, error) {
+	pk, err := NewPrivateKeyFromPemFile(cfg.AccessKey)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return &client{
+	c := &client{
 		cli: NewDefaultHTTPClient(),
 		cfg: cfg,
 		key: pk,
-	}, nil
+	}
+
+	for _, f := range options {
+		f(c)
+	}
+
+	return c, nil
 }
