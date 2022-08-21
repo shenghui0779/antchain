@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/big"
-	"os"
 	"path/filepath"
 )
 
@@ -61,18 +60,27 @@ func (pk *PrivateKey) Sign(hash crypto.Hash, data []byte) ([]byte, error) {
 	return signature, nil
 }
 
-// NewPrivateKeyFromPemBlock returns new private key with pem block.
-func NewPrivateKeyFromPemBlock(b []byte) (*PrivateKey, error) {
+// NewPrivateKeyFromPemFile returns new private key with pem file.
+func NewPrivateKeyFromPemFile(pemFile string) (*PrivateKey, error) {
+	keyPath, err := filepath.Abs(pemFile)
+
+	if err != nil {
+		return nil, err
+	}
+
+	b, err := ioutil.ReadFile(keyPath)
+
+	if err != nil {
+		return nil, err
+	}
+
 	block, _ := pem.Decode(b)
 
 	if block == nil {
-		return nil, errors.New("invalid rsa private key for pem.Decode")
+		return nil, errors.New("no PEM data is found")
 	}
 
-	var (
-		pk  interface{}
-		err error
-	)
+	var pk interface{}
 
 	switch PemBlockType(block.Type) {
 	case RSAPKCS1:
@@ -86,31 +94,6 @@ func NewPrivateKeyFromPemBlock(b []byte) (*PrivateKey, error) {
 	}
 
 	return &PrivateKey{key: pk.(*rsa.PrivateKey)}, nil
-}
-
-// NewPrivateKeyFromPemFile returns new private key with pem file.
-func NewPrivateKeyFromPemFile(pemFile string) (*PrivateKey, error) {
-	keyPath, err := filepath.Abs(pemFile)
-
-	if err != nil {
-		return nil, err
-	}
-
-	f, err := os.Open(keyPath)
-
-	if err != nil {
-		return nil, err
-	}
-
-	defer f.Close()
-
-	b, err := ioutil.ReadAll(f)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return NewPrivateKeyFromPemBlock(b)
 }
 
 // Identity 链账户对应的Identity
@@ -128,11 +111,12 @@ func GetIdentityByName(name string) *Identity {
 	}
 }
 
+// TokenID 链上资产(NFT)的唯一标识
 type TokenID *big.Int
 
-// GetTokenID 根据hash值(建议：md5)获取对应的tokenID(uint256)
-func GetTokenID(hash string) TokenID {
-	v, _ := big.NewInt(0).SetString(hash, 16)
+// GetTokenID 获取token(如：md5值)对应的tokenID(uint256)
+func GetTokenID(token string) TokenID {
+	v, _ := big.NewInt(0).SetString(token, 16)
 
 	return TokenID(v)
 }
