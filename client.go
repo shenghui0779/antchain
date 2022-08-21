@@ -136,10 +136,6 @@ func (c *client) chainCallForBiz(ctx context.Context, method string, options ...
 	return c.do(ctx, c.cfg.Endpoint+CHAIN_CALL_FOR_BIZ, params)
 }
 
-func (c *client) SetHTTPClient(cli *http.Client) {
-	c.cli = NewHTTPClient(cli)
-}
-
 type LogData struct {
 	URL        string        `json:"url"`
 	Method     string        `json:"method"`
