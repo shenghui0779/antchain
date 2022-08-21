@@ -170,7 +170,7 @@ func (c *client) do(ctx context.Context, reqURL string, params X) (string, error
 	ret := gjson.ParseBytes(b)
 
 	if !ret.Get("success").Bool() {
-		return "", fmt.Errorf("antchain: %s | %s", ret.Get("code").String(), ret.Get("data").String())
+		return "", fmt.Errorf("[antchain] %s | %s", ret.Get("code").String(), ret.Get("data").String())
 	}
 
 	return ret.Get("data").String(), nil
