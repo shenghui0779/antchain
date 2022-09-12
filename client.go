@@ -1,12 +1,15 @@
 package antchain
 
 import (
+	"bytes"
 	"context"
 	"crypto"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -67,7 +70,7 @@ func WithParam(key string, value interface{}) ChainCallOption {
 }
 
 type client struct {
-	cli HTTPClient
+	cli *http.Client
 	cfg *Config
 	key *PrivateKey
 }
@@ -136,16 +139,6 @@ func (c *client) chainCallForBiz(ctx context.Context, method string, options ...
 	return c.do(ctx, c.cfg.Endpoint+CHAIN_CALL_FOR_BIZ, params)
 }
 
-type LogData struct {
-	URL        string        `json:"url"`
-	Method     string        `json:"method"`
-	Body       []byte        `json:"body"`
-	StatusCode int           `json:"status_code"`
-	Response   []byte        `json:"response"`
-	Duration   time.Duration `json:"duration"`
-	Error      error         `json:"error"`
-}
-
 func (c *client) do(ctx context.Context, reqURL string, params X) (string, error) {
 	body, err := json.Marshal(params)
 
@@ -153,9 +146,24 @@ func (c *client) do(ctx context.Context, reqURL string, params X) (string, error
 		return "", err
 	}
 
-	resp, err := c.cli.Do(ctx, http.MethodPost, reqURL, body, WithHTTPHeader("Content-Type", "application/json; charset=utf-8"))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, bytes.NewBuffer(body))
 
 	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+
+	resp, err := c.cli.Do(req)
+
+	if err != nil {
+		// If the context has been canceled, the context's error is probably more useful.
+		select {
+		case <-ctx.Done():
+			err = ctx.Err()
+		default:
+		}
+
 		return "", err
 	}
 
@@ -170,7 +178,7 @@ func (c *client) do(ctx context.Context, reqURL string, params X) (string, error
 	ret := gjson.ParseBytes(b)
 
 	if !ret.Get("success").Bool() {
-		return "", fmt.Errorf("[antchain] %s | %s", ret.Get("code").String(), ret.Get("data").String())
+		return "", fmt.Errorf("antchain: %s | %s", ret.Get("code").String(), ret.Get("data").String())
 	}
 
 	return ret.Get("data").String(), nil
@@ -180,7 +188,7 @@ type ClientOption func(c *client)
 
 func WithHTTPClient(cli *http.Client) ClientOption {
 	return func(c *client) {
-		c.cli = NewHTTPClient(cli)
+		c.cli = cli
 	}
 }
 
@@ -192,7 +200,24 @@ func NewClient(cfg *Config, options ...ClientOption) (Client, error) {
 	}
 
 	c := &client{
-		cli: NewDefaultHTTPClient(),
+		cli: &http.Client{
+			Transport: &http.Transport{
+				Proxy: http.ProxyFromEnvironment,
+				DialContext: (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 60 * time.Second,
+				}).DialContext,
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: true,
+				},
+				MaxIdleConns:          0,
+				MaxIdleConnsPerHost:   1000,
+				MaxConnsPerHost:       1000,
+				IdleConnTimeout:       60 * time.Second,
+				TLSHandshakeTimeout:   10 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+			},
+		},
 		cfg: cfg,
 		key: pk,
 	}
